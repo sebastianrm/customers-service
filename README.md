@@ -10,6 +10,7 @@ consulta su base de datos: los demás servicios se enteran de los cambios median
 - **Cache:** Redis (catálogos maestros y consulta por documento)
 - **Stack:** Java 17, Spring Boot 3.3.5, Spring WebFlux, Spring Data Reactive (MongoDB + Redis),
   RxJava 3, Spring Kafka, springdoc-openapi
+- **Integración:** Spring Cloud Config, Eureka Service Discovery, Resilience4j Circuit Breaker
 
 ---
 
@@ -224,7 +225,7 @@ La clave de cada mensaje es el `customerId`, para preservar el orden de particio
 
 | Topic | Quando se publica | Payload |
 |---|---|---|
-| `yanki.customer.registered.v1` | Alta de cliente | `CustomerRegisteredEvent(customerId, username, email, temporaryPassword, roles)` |
+| `yanki.customer.registered.v1` | Alta de cliente | `CustomerRegisteredEvent(customerId, username, email, temporaryPassword, roles, customerType, status)` |
 | `yanki.customer.updated.v1` | Actualizacion de cliente | `CustomerUpdatedEvent(customerId, customerType, profile, status, occurredAt)` |
 | `yanki.customer.deleted.v1` | Baja logica | `CustomerDeletedEvent(customerId, occurredAt)` |
 
@@ -285,14 +286,15 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 mvn clean verify
 ```
 
-El build ejecuta **Checkstyle** (sin violaciones de nivel error) y las pruebas unitarias con
-JUnit 5, Mockito y StepVerifier. El reporte de cobertura queda en `target/site/jacoco/index.html`.
+El build ejecuta las pruebas unitarias con JUnit 5, Mockito y StepVerifier. El reporte de
+cobertura JaCoCo queda en `target/site/jacoco/index.html` (excluyendo `interfaces/**`,
+`config/**` y `CustomersServiceApplication`).
 
 Pruebas incluidas:
 
 | Test | Cobertura |
 |---|---|
-| `CustomerServiceTest` | 19 tests cubriendo CP-001 a CP-019 |
+| `CustomerServiceTest` | Alta, documento duplicado, perfil inválido, filtros, actualización, baja lógica |
 | `CustomerControllerTest` | 7 tests de endpoints REST con WebTestClient |
 | `CustomerMongoAdapterTest` | 6 tests del adaptador MongoDB |
 | `CustomerCacheAdapterTest` | 7 tests del adaptador Redis |

@@ -6,6 +6,7 @@ Microservicio maestro de clientes de la plataforma bancaria Yanki. Única fuente
 - **Base de datos:** MongoDB `yanki_customers` (colección `customers`)
 - **Cache:** Redis (catálogos y consulta por documento)
 - **Stack:** Java 17, Spring Boot 3.3.5, WebFlux, RxJava 3, Spring Kafka, Spring Data Redis Reactive
+- **Integración:** Spring Cloud Config, Eureka Service Discovery, Resilience4j Circuit Breaker
 
 ## Build & Test
 
@@ -15,7 +16,7 @@ $env:PATH="$env:JAVA_HOME\bin;$env:PATH"
 mvn clean verify
 ```
 
-- Compila, ejecuta Checkstyle (cero errores), pruebas unitarias (JUnit 5 + Mockito + StepVerifier) y genera reporte JaCoCo en `target/site/jacoco/index.html`.
+- Compila y ejecuta pruebas unitarias (JUnit 5 + Mockito + StepVerifier). Genera reporte JaCoCo en `target/site/jacoco/index.html` (excluyendo `interfaces/**`, `config/**` y `CustomersServiceApplication`).
 - Para ejecutar el servicio: `mvn spring-boot:run` (requiere MongoDB, Redis y Kafka disponibles).
 
 ## Code Style
@@ -77,29 +78,31 @@ src/main/java/com/yanki/customers
 
 | Topic | Key | Payload |
 |-------|-----|---------|
-| `yanki.customer.registered.v1` | `customerId` | `CustomerRegisteredEvent` |
-| `yanki.customer.updated.v1` | `customerId` | `CustomerUpdatedEvent` |
-| `yanki.customer.deleted.v1` | `customerId` | `CustomerDeletedEvent` |
+| `yanki.customer.registered.v1` | `customerId` | `CustomerRegisteredEvent(customerId, username, email, temporaryPassword, roles, customerType, status)` |
+| `yanki.customer.updated.v1` | `customerId` | `CustomerUpdatedEvent(customerId, customerType, profile, status, occurredAt)` |
+| `yanki.customer.deleted.v1` | `customerId` | `CustomerDeletedEvent(customerId, occurredAt)` |
+
+Roles asignados: `ROLE_CUSTOMER` para todos y `ROLE_ENTERPRISE` adicional para clientes empresariales.
 
 ## Redis Cache
 
-| Patrón de clave | TTL |
-|-----------------|-----|
-| `yanki:customers:document:{TYPE}:{NUMBER}` | 10m |
-| `yanki:customers:catalogs` | 30m |
+| Patrón de clave | TTL | Configurable |
+|-----------------|-----|--------------|
+| `yanki:customers:document:{TYPE}:{NUMBER}` | 10m | `yanki.cache.customer-ttl` |
+| `yanki:customers:catalogs` | 30m | `yanki.cache.catalog-ttl` |
 
-Invalidar explícitamente al hacer PUT/DELETE.
+Invalidar explícitamente al hacer PUT/DELETE. Los TTL se configuran con `@ConfigurationProperties(prefix = "yanki.cache")`.
 
 ## Tests
 
 | Test | Cobertura |
 |------|-----------|
 | `CustomerServiceTest` | Alta, documento duplicado, perfil inválido, filtros, actualización, baja lógica |
-| `AdditionalCustomerServiceTests` | Casos adicionales de validación |
-| `CustomerEventPublisherTest` | Publicación de los 3 eventos |
-| `CustomerCatalogCacheServiceTest` | Cache Redis con TTL |
-| `TemporaryPasswordGeneratorTest` | Longitud y aleatoriedad |
-| `CustomerControllerTest` | Endpoints REST con WebTestClient |
+| `CustomerControllerTest` | 7 tests de endpoints REST con WebTestClient |
+| `CustomerMongoAdapterTest` | 6 tests del adaptador MongoDB |
+| `CustomerCacheAdapterTest` | 7 tests del adaptador Redis |
+| `CustomerKafkaPublisherAdapterTest` | 3 tests del adaptador Kafka |
+| `TemporaryPasswordGeneratorTest` | 2 tests de longitud y aleatoriedad |
 
 ## Traceability
 
