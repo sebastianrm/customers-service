@@ -370,6 +370,7 @@ implementan los puertos de salida y traducen entre Project Reactor (`Mono`/`Flux
 | **Diagramas SEC** | `../DIAGRAMAS_SECUENCIAS/SEC042_*.md` | Flujo de consulta por documento |
 | **Casos de Prueba** | `test-cases/CASOS_PRUEBA.md` | 19 CPs locales (10 Happy Path + 9 Error) |
 | **Casos de Prueba (fuente)** | `../CASOS_PRUEBA/CASOS_PRUEBA_QA.md` | CP-001 a CP-019 (fuente global) |
+| **Contrato OpenAPI** | `api/customers-service.yaml` | Especificación OpenAPI 3.0 completa con schemas, endpoints y errores |
 | **Coleccion Postman** | `postman/Yanki-Customers-Service.postman_collection.json` | 19 requests con test scripts y respuestas de ejemplo |
 | **RTM** | `../CASOS_PRUEBA/RTM.md` | Matriz CU-01 ↔ SEC001/SEC042 ↔ CP-001..019 |
 | **Trazabilidad por servicio** | `../CASOS_PRUEBA/TRACEABILIDAD_POR_SERVICIO.md` | customers-service en matriz global |

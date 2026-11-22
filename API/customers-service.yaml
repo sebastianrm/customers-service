@@ -1,0 +1,774 @@
+openapi: 3.0.3
+info:
+  title: Yanki Customers Service API
+  description: |
+    API REST del maestro de clientes de la plataforma bancaria Yanki.
+    
+    Es el único servicio que expone datos de clientes: los demás microservicios
+    se enteran de los cambios mediante eventos Kafka.
+    
+    **Características principales:**
+    - CRUD completo de clientes personales y empresariales
+    - Consulta por documento de identidad con caché Redis
+    - Catálogos maestros de tipos, perfiles y documentos
+    - Paginación estándar en listados
+    - Manejo uniforme de errores con códigos de negocio
+  version: 1.0.0
+  contact:
+    name: Sebastian Retamal Morales
+    email: retamal.sebastian@gmail.com
+  license:
+    name: Proprietary
+    url: https://yanki.com/license
+
+servers:
+  - url: http://localhost:8082
+    description: Entorno local de desarrollo
+  - url: https://api-gateway.yanki.com/api/customers
+    description: Entorno de producción (vía API Gateway)
+
+tags:
+  - name: Customers
+    description: Maestro de clientes de la plataforma bancaria Yanki
+
+paths:
+  /api/customers:
+    post:
+      tags:
+        - Customers
+      summary: Registra un cliente
+      description: |
+        Registra un cliente nuevo en el maestro y devuelve la contraseña temporal
+        de primer acceso. La contraseña temporal debe ser cambiada en el primer login.
+        
+        **Reglas de negocio:**
+        - Para clientes PERSONAL: se requieren firstName y lastName
+        - Para clientes ENTERPRISE: se requiere businessName
+        - El documento debe ser único en el sistema
+        - Se genera automáticamente una contraseña temporal de 8 caracteres
+      operationId: createCustomer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+            example:
+              type: PERSONAL
+              profile: STANDARD
+              documentType: DNI
+              documentNumber: "70123456"
+              firstName: Juan
+              lastName: Perez
+              email: juan.perez@correo.com
+              phone: "+51987654321"
+              address: Av. Javier Prado Este 4200
+              birthDate: "1990-05-20"
+      responses:
+        '201':
+          description: Cliente creado exitosamente con contraseña temporal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCreatedResponse'
+              example:
+                customerId: "cust_001"
+                type: PERSONAL
+                profile: STANDARD
+                status: ACTIVE
+                documentType: DNI
+                documentNumber: "70123456"
+                firstName: Juan
+                lastName: Perez
+                email: juan.perez@correo.com
+                phone: "+51987654321"
+                address: Av. Javier Prado Este 4200
+                birthDate: "1990-05-20"
+                active: true
+                createdAt: "2024-01-15T10:30:00"
+                updatedAt: "2024-01-15T10:30:00"
+                temporaryPassword: "Yk9x#mP2"
+        '400':
+          description: Solicitud inválida - Error de validación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                timestamp: "2024-01-15T10:30:00Z"
+                status: 400
+                error: Bad Request
+                code: VALIDATION_ERROR
+                message: El tipo de cliente es obligatorio
+                path: /api/customers
+                details:
+                  field: type
+                  message: El tipo de cliente es obligatorio
+        '409':
+          description: Conflicto - El documento ya existe en el sistema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                timestamp: "2024-01-15T10:30:00Z"
+                status: 409
+                error: Conflict
+                code: DOCUMENT_EXISTS
+                message: Ya existe un cliente con el documento DNI 70123456
+                path: /api/customers
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    get:
+      tags:
+        - Customers
+      summary: Lista clientes
+      description: |
+        Lista los clientes del maestro con filtros opcionales por tipo, perfil y estado.
+        Los resultados están paginados según los parámetros page y size.
+      operationId: listCustomers
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: Filtro por tipo de cliente (PERSONAL o ENTERPRISE)
+          schema:
+            $ref: '#/components/schemas/CustomerType'
+        - name: profile
+          in: query
+          required: false
+          description: Filtro por perfil del cliente (STANDARD, VIP o PYME)
+          schema:
+            $ref: '#/components/schemas/CustomerProfile'
+        - name: status
+          in: query
+          required: false
+          description: Filtro por estado del cliente (ACTIVE, BLOCKED o DELETED)
+          schema:
+            $ref: '#/components/schemas/CustomerStatus'
+        - name: page
+          in: query
+          required: false
+          description: Número de página (base cero)
+          schema:
+            type: integer
+            format: int32
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          required: false
+          description: Cantidad de elementos por página
+          schema:
+            type: integer
+            format: int32
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Lista paginada de clientes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResponse_CustomerResponse'
+              example:
+                content:
+                  - customerId: "cust_001"
+                    type: PERSONAL
+                    profile: STANDARD
+                    status: ACTIVE
+                    documentType: DNI
+                    documentNumber: "70123456"
+                    firstName: Juan
+                    lastName: Perez
+                    email: juan.perez@correo.com
+                    active: true
+                    createdAt: "2024-01-15T10:30:00"
+                    updatedAt: "2024-01-15T10:30:00"
+                page: 0
+                size: 20
+                totalElements: 150
+                totalPages: 8
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /api/customers/{id}:
+    get:
+      tags:
+        - Customers
+      summary: Consulta un cliente por identificador
+      description: Busca un cliente específico por su identificador único en el sistema.
+      operationId: getCustomerById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador único del cliente en el sistema
+          schema:
+            type: string
+            example: "cust_001"
+      responses:
+        '200':
+          description: Cliente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+              example:
+                customerId: "cust_001"
+                type: PERSONAL
+                profile: STANDARD
+                status: ACTIVE
+                documentType: DNI
+                documentNumber: "70123456"
+                firstName: Juan
+                lastName: Perez
+                email: juan.perez@correo.com
+                phone: "+51987654321"
+                address: Av. Javier Prado Este 4200
+                birthDate: "1990-05-20"
+                active: true
+                createdAt: "2024-01-15T10:30:00"
+                updatedAt: "2024-01-15T10:30:00"
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                timestamp: "2024-01-15T10:30:00Z"
+                status: 404
+                error: Not Found
+                code: CUSTOMER_NOT_FOUND
+                message: No se encontró un cliente con el identificador cust_001
+                path: /api/customers/cust_001
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    put:
+      tags:
+        - Customers
+      summary: Actualiza un cliente
+      description: |
+        Actualiza los datos de un cliente existente. Solo los campos status y active
+        se aplican directamente en la actualización; los demás campos reemplazan los valores anteriores.
+      operationId: updateCustomer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador único del cliente a actualizar
+          schema:
+            type: string
+            example: "cust_001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '200':
+          description: Cliente actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '400':
+          description: Solicitud inválida - Error de validación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    delete:
+      tags:
+        - Customers
+      summary: Elimina lógicamente un cliente
+      description: |
+        Marca el cliente como DELETED en el sistema sin eliminarlo físicamente.
+        Se publica un evento de eliminación en Kafka para notificar a otros servicios.
+      operationId: deleteCustomer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador único del cliente a eliminar
+          schema:
+            type: string
+            example: "cust_001"
+      responses:
+        '204':
+          description: Cliente eliminado lógicamente sin contenido
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /api/customers/document/{documentType}/{documentNumber}:
+    get:
+      tags:
+        - Customers
+      summary: Consulta un cliente por documento
+      description: |
+        Consulta el maestro por tipo y número de documento utilizando la caché de Redis
+        para mejorar el rendimiento de consultas frecuentes.
+      operationId: getCustomerByDocument
+      parameters:
+        - name: documentType
+          in: path
+          required: true
+          description: Tipo de documento de identidad
+          schema:
+            $ref: '#/components/schemas/DocumentType'
+        - name: documentNumber
+          in: path
+          required: true
+          description: Número de documento de identidad
+          schema:
+            type: string
+            example: "70123456"
+      responses:
+        '200':
+          description: Cliente encontrado por documento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '404':
+          description: No se encontró cliente con el documento proporcionado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                timestamp: "2024-01-15T10:30:00Z"
+                status: 404
+                error: Not Found
+                code: CUSTOMER_NOT_FOUND
+                message: No se encontró un cliente con el documento DNI 70123456
+                path: /api/customers/document/DNI/70123456
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /api/customers/catalogs:
+    get:
+      tags:
+        - Customers
+      summary: Consulta los catálogos maestros
+      description: |
+        Devuelve los catálogos maestros servidos desde la caché de Redis.
+        Incluye los tipos de cliente, perfiles y tipos de documento soportados.
+      operationId: getCustomerCatalogs
+      responses:
+        '200':
+          description: Catálogos maestros obtenidos exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerCatalogsResponse'
+              example:
+                customerTypes:
+                  - PERSONAL
+                  - ENTERPRISE
+                profiles:
+                  - STANDARD
+                  - VIP
+                  - PYME
+                documentTypes:
+                  - DNI
+                  - CEX
+                  - PASSPORT
+                  - RUC
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+components:
+  schemas:
+    CustomerRequest:
+      type: object
+      required:
+        - type
+        - profile
+        - documentType
+        - documentNumber
+        - email
+      description: |
+        Datos de entrada para registrar o actualizar un cliente.
+        
+        **Reglas de validación:**
+        - type, profile, documentType, documentNumber y email son obligatorios
+        - email debe tener formato válido de correo electrónico
+        - Para clientes PERSONAL: firstName y lastName son obligatorios
+        - Para clientes ENTERPRISE: businessName es obligatorio
+        - birthDate solo aplica para clientes PERSONAL
+        - status y active solo se aplican en actualizaciones (PUT)
+      properties:
+        type:
+          $ref: '#/components/schemas/CustomerType'
+          description: Tipo de cliente - PERSONAL para personas naturales, ENTERPRISE para personas jurídicas
+        profile:
+          $ref: '#/components/schemas/CustomerProfile'
+          description: Perfil del cliente - STANDARD para todos, VIP solo para PERSONAL, PYME solo para ENTERPRISE
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+          description: Tipo de documento de identidad del cliente
+        documentNumber:
+          type: string
+          description: Número de documento de identidad - debe ser único en el sistema
+          example: "70123456"
+          minLength: 1
+        businessName:
+          type: string
+          description: Nombre comercial del cliente empresarial - obligatorio cuando type es ENTERPRISE
+          example: "Acme S.A.C."
+          nullable: true
+        firstName:
+          type: string
+          description: Nombres del cliente personal - obligatorio cuando type es PERSONAL
+          example: "Juan"
+          nullable: true
+        lastName:
+          type: string
+          description: Apellidos del cliente personal - obligatorio cuando type es PERSONAL
+          example: "Perez"
+          nullable: true
+        email:
+          type: string
+          format: email
+          description: Correo electrónico del cliente - debe tener formato válido
+          example: "juan.perez@correo.com"
+        phone:
+          type: string
+          description: Teléfono de contacto del cliente en formato internacional
+          example: "+51987654321"
+          nullable: true
+        address:
+          type: string
+          description: Dirección física del cliente
+          example: "Av. Javier Prado Este 4200"
+          nullable: true
+        birthDate:
+          type: string
+          format: date
+          description: Fecha de nacimiento del cliente personal en formato ISO 8601 (YYYY-MM-DD)
+          example: "1990-05-20"
+          nullable: true
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+          description: Estado del cliente - solo se aplica en actualizaciones (PUT)
+          nullable: true
+        active:
+          type: boolean
+          description: Indicador de operación - solo se aplica en actualizaciones (PUT)
+          example: true
+          nullable: true
+
+    CustomerResponse:
+      type: object
+      description: |
+        Respuesta con los datos completos de un cliente del maestro.
+        
+        **Nota:** Nunca incluye la contraseña temporal; esa credencial solo se devuelve
+        en la respuesta de creación (CustomerCreatedResponse).
+      properties:
+        customerId:
+          type: string
+          description: Identificador único del cliente generado por el sistema
+          example: "cust_001"
+        type:
+          $ref: '#/components/schemas/CustomerType'
+        profile:
+          $ref: '#/components/schemas/CustomerProfile'
+        status:
+          $ref: '#/components/schemas/CustomerStatus'
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+        documentNumber:
+          type: string
+          description: Número de documento de identidad
+          example: "70123456"
+        businessName:
+          type: string
+          description: Nombre comercial - presente solo en clientes ENTERPRISE
+          example: "Acme S.A.C."
+          nullable: true
+        firstName:
+          type: string
+          description: Nombres - presente solo en clientes PERSONAL
+          example: "Juan"
+          nullable: true
+        lastName:
+          type: string
+          description: Apellidos - presente solo en clientes PERSONAL
+          example: "Perez"
+          nullable: true
+        email:
+          type: string
+          format: email
+          description: Correo electrónico del cliente
+          example: "juan.perez@correo.com"
+        phone:
+          type: string
+          description: Teléfono de contacto
+          example: "+51987654321"
+          nullable: true
+        address:
+          type: string
+          description: Dirección física del cliente
+          example: "Av. Javier Prado Este 4200"
+          nullable: true
+        birthDate:
+          type: string
+          format: date
+          description: Fecha de nacimiento en formato ISO 8601
+          example: "1990-05-20"
+          nullable: true
+        active:
+          type: boolean
+          description: Indicador de operación activa del cliente
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de creación del registro en formato ISO 8601
+          example: "2024-01-15T10:30:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de la última actualización en formato ISO 8601
+          example: "2024-01-15T10:30:00"
+
+    CustomerCreatedResponse:
+      type: object
+      description: |
+        Respuesta exclusiva de la creación de un cliente.
+        
+        Incluye todos los campos de CustomerResponse más la contraseña temporal
+        que el cliente deberá cambiar en su primer acceso. Esta credencial NO se
+        devuelve en ninguna otra operación.
+      allOf:
+        - $ref: '#/components/schemas/CustomerResponse'
+        - type: object
+          properties:
+            temporaryPassword:
+              type: string
+              description: Contraseña temporal generada automáticamente para el primer acceso - debe ser cambiada en el primer login
+              example: "Yk9x#mP2"
+              minLength: 8
+
+    CustomerCatalogsResponse:
+      type: object
+      description: Respuesta con los catálogos maestros del servicio de clientes
+      properties:
+        customerTypes:
+          type: array
+          description: Lista de tipos de cliente soportados por el sistema
+          items:
+            type: string
+            enum:
+              - PERSONAL
+              - ENTERPRISE
+          example:
+            - PERSONAL
+            - ENTERPRISE
+        profiles:
+          type: array
+          description: Lista de perfiles de cliente soportados por el sistema
+          items:
+            type: string
+            enum:
+              - STANDARD
+              - VIP
+              - PYME
+          example:
+            - STANDARD
+            - VIP
+            - PYME
+        documentTypes:
+          type: array
+          description: Lista de tipos de documento de identidad soportados
+          items:
+            type: string
+            enum:
+              - DNI
+              - CEX
+              - PASSPORT
+              - RUC
+          example:
+            - DNI
+            - CEX
+            - PASSPORT
+            - RUC
+
+    PageResponse_CustomerResponse:
+      type: object
+      description: Respuesta paginada estándar para listados de clientes
+      properties:
+        content:
+          type: array
+          description: Lista de elementos en la página actual
+          items:
+            $ref: '#/components/schemas/CustomerResponse'
+        page:
+          type: integer
+          format: int32
+          description: Número de página actual (base cero)
+          example: 0
+        size:
+          type: integer
+          format: int32
+          description: Cantidad de elementos solicitados por página
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          description: Cantidad total de elementos que cumplen el filtro aplicado
+          example: 150
+        totalPages:
+          type: integer
+          format: int32
+          description: Cantidad total de páginas disponibles
+          example: 8
+
+    CustomerType:
+      type: string
+      description: Tipo de cliente del banco - PERSONAL para personas naturales, ENTERPRISE para personas jurídicas
+      enum:
+        - PERSONAL
+        - ENTERPRISE
+      example: PERSONAL
+
+    CustomerProfile:
+      type: string
+      description: |
+        Perfil del cliente según el tipo de cliente.
+        - STANDARD: válido para clientes personales y empresariales
+        - VIP: exclusivo de clientes personales
+        - PYME: exclusivo de clientes empresariales
+      enum:
+        - STANDARD
+        - VIP
+        - PYME
+      example: STANDARD
+
+    CustomerStatus:
+      type: string
+      description: |
+        Estado del cliente dentro de la plataforma Yanki.
+        - ACTIVE: cliente habilitado para operar
+        - BLOCKED: cliente bloqueado por el banco
+        - DELETED: cliente eliminado lógicamente
+      enum:
+        - ACTIVE
+        - BLOCKED
+        - DELETED
+      example: ACTIVE
+
+    DocumentType:
+      type: string
+      description: |
+        Tipo de documento de identidad aceptado por el banco.
+        - DNI: Documento Nacional de Identidad (Perú)
+        - CEX: Carnet de Extranjería
+        - PASSPORT: Pasaporte
+        - RUC: Registro Único de Contribuyentes (Perú)
+      enum:
+        - DNI
+        - CEX
+        - PASSPORT
+        - RUC
+      example: DNI
+
+    ApiError:
+      type: object
+      description: |
+        Cuerpo estándar de error de la API Yanki.
+        
+        Todos los errores siguen esta estructura uniforme para facilitar
+        el manejo de errores en los clientes.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Momento exacto en que se generó el error en formato ISO 8601
+          example: "2024-01-15T10:30:00Z"
+        status:
+          type: integer
+          format: int32
+          description: Código de estado HTTP estándar
+          example: 400
+        error:
+          type: string
+          description: Descripción textual del código de estado HTTP
+          example: "Bad Request"
+        code:
+          type: string
+          description: Código de negocio específico del error para manejo programático
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Descripción legible del error en español
+          example: "El tipo de cliente es obligatorio"
+        path:
+          type: string
+          description: Ruta de la API que originó el error
+          example: "/api/customers"
+        details:
+          type: object
+          description: Detalle adicional del error, como errores de validación por campo
+          additionalProperties: true
+          nullable: true
+          example:
+            field: type
+            message: El tipo de cliente es obligatorio
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido mediante el endpoint /auth/login del auth-service
+
+security:
+  - BearerAuth: []
