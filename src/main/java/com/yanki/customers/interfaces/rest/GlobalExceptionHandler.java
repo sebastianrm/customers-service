@@ -56,9 +56,9 @@ public class GlobalExceptionHandler {
         String path = path(exchange);
         log.warn("Error de validacion en {}: {}", path, details);
         log.debug("Campos con error de validacion en {}: {} campos afectados", path, details.size());
-        ApiError body = ApiError.of(HttpStatus.BAD_REQUEST.value(), HttpStatus.BAD_REQUEST.getReasonPhrase(),
+        ApiError body = ApiError.of(HttpStatus.UNPROCESSABLE_ENTITY.value(), HttpStatus.UNPROCESSABLE_ENTITY.getReasonPhrase(),
                 "VALIDATION_ERROR", "La solicitud contiene datos invalidos", path, details);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
     }
 
     /**

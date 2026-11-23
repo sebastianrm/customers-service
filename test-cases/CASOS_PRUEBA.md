@@ -273,9 +273,9 @@
 
 | Archivo | Sección | Descripción |
 |---------|---------|-------------|
-| [`../../CASOS_USO/CU-01-AltaClientes.md`](../../CASOS_USO/CU-01-AltaClientes.md) | Caso de Uso completo | Gestión de clientes (CU-01) |
+| [`../../docs/CASOS_USO`](../../docs/CASOS_USO/CU-01-AltaClientes.md) | Caso de Uso completo | Gestión de clientes (CU-01) |
 | [`../../DIAGRAMAS_SECUENCIAS/SEC001_alta_cliente_personal.md`](../../DIAGRAMAS_SECUENCIAS/SEC001_alta_cliente_personal.md) | Diagrama de secuencia | Flujo de alta de cliente personal |
 | [`../../DIAGRAMAS_SECUENCIAS/SEC042_credencial_automatica_eventdriven.md`](../../DIAGRAMAS_SECUENCIAS/SEC042_credencial_automatica_eventdriven.md) | Diagrama de secuencia | Flujo de credencial automática event-driven |
-| [`../../CASOS_PRUEBA/CASOS_PRUEBA_QA.md`](../../CASOS_PRUEBA/CASOS_PRUEBA_QA.md) | CP-001 a CP-019 | Fuente original de los casos de prueba |
-| [`../../CASOS_PRUEBA/RTM.md`](../../CASOS_PRUEBA/RTM.md) | Fila CU-01 | Matriz de trazabilidad completa |
-| [`../../CASOS_PRUEBA/TRACEABILIDAD_POR_SERVICIO.md`](../../CASOS_PRUEBA/TRACEABILIDAD_POR_SERVICIO.md) | customers-service | Trazabilidad por microservicio |
+| [`../../docs/CASOS_PRUEBA`](../../docs/CASOS_PRUEBA/CASOS_PRUEBA_QA.md) | CP-001 a CP-019 | Fuente original de los casos de prueba |
+| [`../../docs/CASOS_PRUEBA`](../../docs/CASOS_PRUEBA/RTM.md) | Fila CU-01 | Matriz de trazabilidad completa |
+| [`../../docs/CASOS_PRUEBA`](../../docs/CASOS_PRUEBA/TRACEABILIDAD_POR_SERVICIO.md) | customers-service | Trazabilidad por microservicio |

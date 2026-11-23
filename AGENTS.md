@@ -110,4 +110,4 @@ Invalidar explícitamente al hacer PUT/DELETE. Los TTL se configuran con `@Confi
 - **Diagramas:** SEC001, SEC042
 - **Casos de Prueba:** [test-cases/CASOS_PRUEBA.md](test-cases/CASOS_PRUEBA.md) (CP-001 a CP-019)
 - **Colección Postman:** [postman/Yanki-Customers-Service.postman_collection.json](postman/Yanki-Customers-Service.postman_collection.json) (19 requests con test scripts)
-- Ver [`../CASOS_PRUEBA/RTM.md`](../CASOS_PRUEBA/RTM.md) para la matriz completa.
+- Ver [`../docs/CASOS_PRUEBA`](../docs/CASOS_PRUEBA/RTM.md) para la matriz completa.
